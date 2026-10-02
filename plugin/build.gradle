@@ -14,7 +14,7 @@ dependencies {
     // AGP 仅编译期引用（运行时由宿主工程提供，避免版本冲突）
     compileOnly 'com.android.tools.build:gradle:7.4.2'
     // 核心混淆引擎（Gradle 7.6 现代化改造版，D8 替代 dx，mavenLocal 发布）
-    implementation 'com.github.CodingGay.BlackObfuscator:dex-tools:2.3-SNAPSHOT'
+    implementation 'com.github.4327b9fb.BlackObfuscator:dex-tools:2.3'
     implementation 'commons-io:commons-io:2.5'
     implementation gradleApi()
     implementation localGroovy()
