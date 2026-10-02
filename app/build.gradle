@@ -1,16 +1,15 @@
-plugins {
-    id 'com.android.application'
-    id 'top.niunaijun.blackobfuscator'
-}
+apply plugin: 'com.android.application'
+apply plugin: 'top.niunaijun.blackobfuscator'
 
 android {
-    compileSdkVersion 30
-    buildToolsVersion "30.0.0"
+    namespace 'top.niunaijun.blackobfuscator.asplugin'
+    compileSdk 34
+    buildToolsVersion "34.0.0"
 
     defaultConfig {
         applicationId "top.niunaijun.blackobfuscator.asplugin"
-        minSdkVersion 21
-        targetSdkVersion 30
+        minSdk 21
+        targetSdk 34
         versionCode 1
         versionName "1.0"
 
@@ -45,8 +44,8 @@ android {
 //        }
 //    }
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_1_8
-        targetCompatibility JavaVersion.VERSION_1_8
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
