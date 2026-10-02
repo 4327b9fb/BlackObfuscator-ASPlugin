@@ -2,7 +2,7 @@ apply plugin: 'groovy'
 apply plugin: 'maven-publish'
 
 group = 'top.niunaijun.blackobfuscator'
-version = '1.0.0'
+version = '2.0.0'
 
 repositories {
     google()
