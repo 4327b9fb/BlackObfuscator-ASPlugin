@@ -1,3 +1,5 @@
 rootProject.name = "BlackObfuscator-ASPlugin"
-include ':app'
+if (!System.getenv("JITPACK")) {
+    include ':app'
+}
 include ':plugin'
