@@ -1,8 +1,18 @@
 apply plugin: 'groovy'
 apply plugin: 'maven-publish'
+apply plugin: 'java-gradle-plugin'
 
 group = 'top.niunaijun.blackobfuscator'
 version = '2.0.0'
+
+gradlePlugin {
+    plugins {
+        blackobfuscator {
+            id = 'top.niunaijun.blackobfuscator'
+            implementationClass = 'top.niunaijun.blackobfuscator.ObfPlugin'
+        }
+    }
+}
 
 repositories {
     google()
