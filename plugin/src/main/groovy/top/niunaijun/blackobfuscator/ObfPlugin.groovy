@@ -9,7 +9,7 @@ import com.android.build.api.variant.ApplicationVariant
 import top.niunaijun.blackobfuscator.core.ObfDex
 
 /**
- * BlackObfuscator AGP 7+ / 8.x 适配版。
+ * BlackObfuscator AGP 7.x / 8.x / 9.x 适配版。
  *
  * 相对原版（AGP 3.3/4.2 时代）的关键变更：
  *  1. 弃用 afterEvaluate + applicationVariants + 硬拼老任务名（AGP 7+ 已移除，
@@ -23,6 +23,9 @@ import top.niunaijun.blackobfuscator.core.ObfDex
  *  5. 挂载全部候选 dex 产出任务（minify&lt;Variant&gt;WithR8 / mergeDex /
  *     mergeProjectDex / mergeLibDex / mergeExtDex），configureEach 天然跳过
  *     当前 AGP 版本不存在的任务，覆盖 AGP 7.x 与 8.x 的差异。
+ *  6. android.jar 解析兼容 AGP 9：compileSdk 为 CompileSdkVersion 对象
+ *     （7/8 为 Int/String），sdkDirectory 走 androidComponents.sdkComponents，
+ *     兜底 BaseExtension.sdkDirectory / ANDROID_HOME / local.properties。
  */
 class ObfPlugin implements Plugin<Project> {
 
@@ -123,13 +126,70 @@ class ObfPlugin implements Plugin<Project> {
             if (androidExt == null) {
                 return null
             }
-            def sdkDir = androidExt.sdkDirectory
-            def compileSdk = androidExt.compileSdkVersion
-            if (sdkDir != null && compileSdk != null) {
+            def compileSdk
+            if (androidExt.hasProperty('compileSdkVersion')) {
+                compileSdk = androidExt.compileSdkVersion
+            } else if (androidExt.hasProperty('compileSdk')) {
+                compileSdk = androidExt.compileSdk
+            } else {
+                return null
+            }
+            // 三种形态：Int/String（AGP 7/8）、CompileSdkVersion 对象（AGP 9 新 DSL）
+            String platformDir = null
+            if (compileSdk instanceof Integer || compileSdk instanceof Long || compileSdk instanceof String) {
                 String cs = String.valueOf(compileSdk)
-                // AGP 8 的 compileSdkVersion 可能是 "android-34" 或 "34"
+                // "android-34" 或 "34"
                 String apiLevel = cs.contains('-') ? cs.substring(cs.lastIndexOf('-') + 1) : cs
-                def jar = new File(sdkDir, "platforms/android-${apiLevel}/android.jar")
+                platformDir = "android-" + apiLevel
+            } else {
+                def api = compileSdk.hasProperty('apiLevel') ? compileSdk.apiLevel : null
+                def minor = compileSdk.hasProperty('minorApiLevel') ? compileSdk.minorApiLevel : null
+                def codeName = compileSdk.hasProperty('codeName') ? compileSdk.codeName : null
+                if (codeName != null && !String.valueOf(codeName).isEmpty()) {
+                    // preview：android-<codeName>
+                    platformDir = "android-" + codeName
+                } else if (api != null) {
+                    int minorVal = minor == null ? 0 : Integer.parseInt(String.valueOf(minor))
+                    // minor API level（小数点版本）：android-<api>.<minor>
+                    platformDir = minorVal > 0 ? "android-${api}.${minorVal}" : "android-${api}"
+                }
+            }
+            if (platformDir == null) {
+                return null
+            }
+
+            File sdkDir = null
+            // 1) AGP 7.x+ 官方 API：androidComponents.sdkComponents.sdkDirectory
+            def ac = project.extensions.findByName('androidComponents')
+            if (ac != null) {
+                try {
+                    sdkDir = ac.sdkComponents.sdkDirectory.get().asFile
+                } catch (Throwable ignore) {
+                }
+            }
+            // 2) 老 BaseExtension 属性（AGP 4.x-6.x）
+            if (sdkDir == null && androidExt.hasProperty('sdkDirectory')) {
+                sdkDir = androidExt.sdkDirectory
+            }
+            // 3) 兜底：ANDROID_HOME / local.properties
+            if (sdkDir == null) {
+                String env = System.getenv('ANDROID_HOME') ?: System.getenv('ANDROID_SDK_ROOT')
+                if (env != null) {
+                    sdkDir = new File(env)
+                } else {
+                    def localProps = new Properties()
+                    def lf = new File(project.rootDir, 'local.properties')
+                    if (lf.exists()) {
+                        lf.withInputStream { localProps.load(it) }
+                        String sdkPath = localProps.getProperty('sdk.dir')
+                        if (sdkPath != null) {
+                            sdkDir = new File(sdkPath)
+                        }
+                    }
+                }
+            }
+            if (sdkDir != null) {
+                def jar = new File(sdkDir, "platforms/${platformDir}/android.jar")
                 project.logger.lifecycle("BlackObf[diag]: androidJarCandidate={} exists={}", jar.absolutePath, jar.exists())
                 return jar.exists() ? jar.absolutePath : null
             }
