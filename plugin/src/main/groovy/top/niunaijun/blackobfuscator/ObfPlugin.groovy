@@ -1,11 +1,12 @@
 package top.niunaijun.blackobfuscator
 
+import com.android.build.api.variant.ApplicationVariant
+import groovy.transform.CompileStatic
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.RegularFile
 import org.gradle.api.provider.Provider
-import com.android.build.api.variant.ApplicationVariant
 import top.niunaijun.blackobfuscator.core.ObfDex
 
 /**
@@ -31,9 +32,14 @@ class ObfPlugin implements Plugin<Project> {
 
     private static final String PLUGIN_NAME = "BlackObfuscator"
 
+    @CompileStatic
+    private static BlackObfuscatorExtension createExtension(Project project) {
+        return (BlackObfuscatorExtension) project.extensions.create(PLUGIN_NAME, BlackObfuscatorExtension, project)
+    }
+
     @Override
     void apply(Project project) {
-        def extension = project.extensions.create(PLUGIN_NAME, BlackObfuscatorExtension, project)
+        def extension = createExtension(project)
 
         def androidComponents = project.extensions.findByType(
                 Class.forName('com.android.build.api.variant.AndroidComponentsExtension'))
@@ -122,7 +128,6 @@ class ObfPlugin implements Plugin<Project> {
     private static String resolveAndroidJar(Project project) {
         try {
             def androidExt = project.extensions.findByName('android')
-            project.logger.lifecycle("BlackObf[diag]: androidExt={}", androidExt?.class?.name)
             if (androidExt == null) {
                 return null
             }
