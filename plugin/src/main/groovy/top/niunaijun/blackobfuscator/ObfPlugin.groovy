@@ -6,6 +6,7 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.file.RegularFile
+import org.gradle.api.GradleException
 import org.gradle.api.provider.Provider
 import top.niunaijun.blackobfuscator.core.ObfDex
 
@@ -40,6 +41,31 @@ class ObfPlugin implements Plugin<Project> {
     @Override
     void apply(Project project) {
         def extension = createExtension(project)
+
+        // 隔离 classpath 初始化：运行时创建独立配置（发布物不携带 build.gradle 配置块），
+        // 只解析 R8 并 force 扩展指定的版本（默认 8.3.37）；核心库 jar 直接复用插件
+        // classpath（ObfDex 内部收集），child-first 加载规避宿主 R8 崩溃（实测 AGP 9.2.x 宿主 9.2.14）。
+        // 初始化失败直接终止构建——宿主 R8 正是崩溃源，降级到宿主 classpath 必崩。
+        // 注意：r8Version 必须在 afterEvaluate 后读取——用户 build.gradle 里的
+        // BlackObfuscator { r8Version } 配置块在 apply 之后才执行，apply 时读只会拿到默认值。
+        def obfIsolated = project.configurations.maybeCreate('blackobfIsolated')
+        obfIsolated.canBeResolved = true
+        obfIsolated.canBeConsumed = false
+        project.afterEvaluate {
+            try {
+                String r8Version = extension.r8Version?.trim() ?: '8.3.37'
+                obfIsolated.resolutionStrategy.force("com.android.tools:r8:${r8Version}")
+                project.dependencies.add('blackobfIsolated', "com.android.tools:r8:${r8Version}")
+                def jars = new ArrayList<File>(obfIsolated.resolve())
+                ObfDex.initIsolated(jars)
+                project.logger.info("BlackObfuscator: isolated r8 version = {}", r8Version)
+            } catch (Throwable t) {
+                throw new GradleException(
+                        "BlackObfuscator: isolated R8 init failed (r8=" + (extension.r8Version ?: '8.3.37')
+                                + "). The plugin requires its own R8 classloader to avoid AGP host R8 "
+                                + "crashes on obfuscated control flow.", t)
+            }
+        }
 
         def androidComponents = project.extensions.findByType(
                 Class.forName('com.android.build.api.variant.AndroidComponentsExtension'))
