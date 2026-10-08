@@ -4,9 +4,12 @@ import org.jf.DexLib2Utils;
 import org.jf.util.TrieTree;
 
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.InputStream;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
+import java.nio.charset.StandardCharsets;
 import java.security.ProtectionDomain;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -191,6 +194,27 @@ public class ObfDex {
         }
     }
 
+    /**
+     * 读取输入 dex 的版本（magic 第 5-7 字节，如 "035"/"037"/"039"），换算成 D8 的 min-api，
+     * 使混淆写回的 dex 保持与原 dex 相同的版本（与 HeaderItem magic 映射一致：
+     * <24→035、24-25→037、26-27→038、>=28→039）。
+     */
+    private static int getMinApiForDex(File input) {
+        try (InputStream in = new FileInputStream(input)) {
+            byte[] magic = new byte[8];
+            int n = in.read(magic);
+            if (n >= 7 && magic[0] == 'd' && magic[1] == 'e' && magic[2] == 'x' && magic[3] == '\n') {
+                int version = Integer.parseInt(new String(magic, 4, 3, StandardCharsets.US_ASCII));
+                if (version <= 36) return 21;   // 035/036
+                if (version == 37) return 24;   // 037
+                if (version == 38) return 26;   // 038
+                return 28;                      // 039+
+            }
+        } catch (Exception ignored) {
+        }
+        return 21; // 读取失败时用默认
+    }
+
     public static void obf(String dir, int depth, String[] obfClass, String[] blackClass, String mappingFile, String androidJar) {
         File file = new File(dir);
         Mapping mapping = new Mapping(mappingFile);
@@ -262,15 +286,18 @@ public class ObfDex {
                 throw new IllegalStateException(
                         "BlackObfuscator: isolated loader not initialized (call ObfDex.initIsolated first)");
             }
+            // 保持 dex 版本：按输入 dex 的 magic 版本换算 min-api，混淆写回后版本不变
+            int minApi = getMinApiForDex(input);
             Class<?> helper = Class.forName(
                     "top.niunaijun.blackobfuscator.core.ObfDexIsolatedHelper", true, cl);
-            helper.getMethod("obfAndWriteBack", String.class, String.class, String.class, String.class, int.class)
+            helper.getMethod("obfAndWriteBack", String.class, String.class, String.class, String.class, int.class, int.class)
                     .invoke(null,
                             splitDex.getAbsolutePath(),
                             tempJar.getAbsolutePath(),
                             obfDex.getAbsolutePath(),
                             androidJar,
-                            depth);
+                            depth,
+                            minApi);
             DexLib2Utils.mergerAndCoverDexFile(input, obfDex, input);
         } catch (Throwable t) {
             // 明确报错而非静默：混淆失败若被吞掉，构建仍会成功但 dex 实际未混淆

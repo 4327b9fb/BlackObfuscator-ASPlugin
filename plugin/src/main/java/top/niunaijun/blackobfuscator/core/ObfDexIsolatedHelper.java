@@ -14,7 +14,7 @@ import top.niunaijun.obfuscator.ObfuscatorConfiguration;
  */
 public class ObfDexIsolatedHelper {
 
-    public static void obfAndWriteBack(String splitDex, String tempJar, String obfDex, String androidJar, int depth) throws Exception {
+    public static void obfAndWriteBack(String splitDex, String tempJar, String obfDex, String androidJar, int depth, int minApi) throws Exception {
         new Dex2jarCmd(new ObfuscatorConfiguration() {
             @Override
             public int getObfDepth() {
@@ -28,9 +28,9 @@ public class ObfDexIsolatedHelper {
             }
         }).doMain("-f", splitDex, "-o", tempJar);
         if (androidJar != null && !androidJar.isEmpty()) {
-            new Jar2Dex().doMain("-f", "-l", androidJar, "-o", obfDex, tempJar);
+            new Jar2Dex().doMain("-f", "-l", androidJar, "--min-api", String.valueOf(minApi), "-o", obfDex, tempJar);
         } else {
-            new Jar2Dex().doMain("-f", "-o", obfDex, tempJar);
+            new Jar2Dex().doMain("-f", "--min-api", String.valueOf(minApi), "-o", obfDex, tempJar);
         }
     }
 }
